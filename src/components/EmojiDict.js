@@ -1,5 +1,5 @@
 import React, {Component} from 'react';
-import {View, Text, StyleSheet} from 'react-native';
+import {View, Text, StyleSheet, Button, FlatList} from 'react-native';
 import {BleManager} from 'react-native-ble-plx';
 import Auth0 from 'react-native-auth0';
 const auth0 = new Auth0({
@@ -11,17 +11,22 @@ class EmojiDict extends Component {
   constructor() {
     super();
     this.manager = new BleManager();
+    this.onLogin = this.onLogin.bind(this);
+    this.scanAndConnect = this.scanAndConnect.bind(this);
   }
   state = {
     '😃': '😃 Smiley',
     '🚀': '🚀 Rocket',
     '⚛️': '⚛️ Atom Symbol',
     accessToken: null,
+    devices: [],
+    isScanning: false,
+    scanText: 'Scan',
   };
 
   componentDidMount() {
-    this.onLogin();
-    this.scanAndConnect();
+    // this.onLogin();
+    // this.scanAndConnect();
   }
   onLogin = () => {
     auth0.webAuth
@@ -30,7 +35,7 @@ class EmojiDict extends Component {
         audience: 'https://sparkgrills.auth0.com/userinfo',
       })
       .then(credentials => {
-        console.log('here');
+        console.log(credentials);
         Alert.alert(
           'Success',
           'AccessToken: ' + credentials.accessToken,
@@ -48,8 +53,25 @@ class EmojiDict extends Component {
   };
 
   scanAndConnect() {
-    this.manager.startDeviceScan(null, null, (error, device) => {
-      console.log('here');
+    console.log('here');
+    if (this.state.isScanning) {
+      //already scanning, be done
+      this.manager.stopDeviceScan();
+      this.setState({
+        isScanning: false,
+      });
+      return;
+    }
+    this.setState({
+      isScanning: true,
+    });
+    this.manager.startDeviceScan(null, null, (error, foundDevice) => {
+      const existingDevice = this.state.devices.find(device => {
+        return device.id == foundDevice.id;
+      });
+      if (!existingDevice) {
+        this.setState({devices: [...this.state.devices, foundDevice]});
+      }
       if (error) {
         // Handle error (scanning will be stopped automatically)
         return;
@@ -57,12 +79,16 @@ class EmojiDict extends Component {
 
       // Check if it is a device you are looking for based on advertisement data
       // or other criteria.
-      if (device.name === 'TI BLE Sensor Tag' || device.name === 'SensorTag') {
+      if (
+        foundDevice.name === 'TI BLE Sensor Tag' ||
+        foundDevice.name === 'SensorTag'
+      ) {
         // Stop scanning as it's not necessary if you are scanning for one device.
         this.manager.stopDeviceScan();
 
         // Proceed with connection.
       }
+      console.log(this.state.devices);
     });
   }
 
@@ -70,6 +96,15 @@ class EmojiDict extends Component {
     return (
       <View style={styles.container}>
         <Text>{this.state['😃']}</Text>
+        <Button title="Authenticate" onPress={this.onLogin} />
+        <Button
+          title={this.state.isScanning ? 'Stop Scan' : 'Scan'}
+          onPress={this.scanAndConnect}
+        />
+        <FlatList
+          data={this.state.devices}
+          renderItem={({item}) => <Text style={styles.item}>{item.name}</Text>}
+        />
       </View>
     );
   }
